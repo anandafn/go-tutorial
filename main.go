@@ -1,0 +1,99 @@
+package main
+
+import (
+	"fmt"
+	"log"
+	"os"
+
+	"github.com/gofiber/fiber/v2"
+	"github.com/joho/godotenv"
+)
+
+type Todo struct {
+	ID int `json:"id"`
+	Completed bool `json:"completed"`
+	Body string `json:"body"`
+}
+
+func main() {
+	fmt.Println("Hello")
+	app := fiber.New()
+
+	err := godotenv.Load(".env")
+
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
+
+	PORT := os.Getenv("PORT")
+
+	todos := []Todo{}
+
+	app.Get("/api/todos", func(c *fiber.Ctx) error {
+		return c.Status(200).JSON(todos)
+	})
+
+	// CREATE A TODO
+	app.Post("/api/todos", func(c *fiber.Ctx) error {
+		todo := &Todo{}
+
+		if err := c.BodyParser(todo); err != nil {
+			return err
+		}
+
+		if todo.Body == "" {
+			return c.Status(400).JSON(fiber.Map{"error": "Todo body is required"})
+		}
+
+		todo.ID = len(todos) + 1
+
+		todos = append(todos, *todo)
+
+		// NOTES
+		// var x int = 5 // This is stored in a memory like 0x00001
+		// var p *int = &x // The output is same as x (0x00001). This is a pointer that point to memory address of x
+
+		// fmt.Println(p) // The output will be 0x00001
+		// fmt.Println(*p) // The output will be 5
+
+		return c.Status(201).JSON(todo)
+	})
+
+	// UPDATE A TODO
+	app.Patch("/api/todos/:id", func(c *fiber.Ctx) error {
+		id := c.Params("id")
+
+		for i, todo := range todos {
+			// todo.ID is a number, so it must be converted to string by using fmt.Sprint
+			if fmt.Sprint(todo.ID) == id {
+				todos[i].Completed = true
+				return c.Status(200).JSON(todos[i])
+			}
+		}
+
+		return c.Status(404).JSON(fiber.Map{"error": "Todo not found"})
+	})
+
+	// DELETE A TODO
+	app.Delete("/api/todos/:id", func(c *fiber.Ctx) error {
+		id := c.Params("id")
+
+		// The loop below will delete the selected todo. 
+		// For example we have todos like this 1 2 3 4 5
+		// Then if we delete the todo number 3, the result must be 1 2  4 5
+		// todos[:i] is to handle data 1 2 
+		// todos[i+1:]... is to handle the rest data after the deleted todo (4 5)
+
+		for i, todo := range todos {
+			if fmt.Sprint(todo.ID) == id {
+				todos = append(todos[:i], todos[i+1:]...)
+				return c.Status(200).JSON(fiber.Map{"success": true})
+			}
+		}
+
+		return c.Status(404).JSON(fiber.Map{"error": "Todo not found"})
+		
+	})
+
+	log.Fatal(app.Listen(":"+PORT))
+}
